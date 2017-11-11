@@ -20,7 +20,7 @@ FILE *inFile = NULL;
 
 	unsigned long inPtr = 0,     // input file read offset
 		thisStringPos = 0,        // array offset for the found string in this iteration
-		string_start_offset = 0;  // offset of the start of the found string inside file
+		stringAddr = 0;  // offset of the start of the found string inside file
 
 
 int main(int argc, char **argv) {
@@ -55,9 +55,20 @@ int doSjisSearch(FILE *inFile) {
 	char thisString[strBufSize];
 
 	while (!feof(inFile)) {
+		// get first byte, see if it is ascii
 		byte1 = getc(inFile);
+		
+		if(isAscii(byte1)) {
+			//printf("found ascii\n");
+			thisString[thisStringPos++] = byte1;
+			inPtr++;
+			goto foundChar;
+		}
+		
+		// not ascii, move on to double byte sjis
 		byte2 = getc(inFile);
 	
+		// set endian-ness...
 		if (littleEndian) {
 			most = byte2; least = byte1;
 		}	else {
@@ -65,24 +76,31 @@ int doSjisSearch(FILE *inFile) {
 		}
 
 		if (isSjis(most, least)) {
+			printf("found sjis\n");
 			thisString[thisStringPos++] = most;
 			thisString[thisStringPos++] = least;
-			printf("%X %X\n", most, least);
-			if (!string_start_offset) string_start_offset = inPtr;
-			if (thisStringPos >= sizeof(thisString))
-				goto print_found_string;
-		} else {
-			print_found_string:
-			if (thisStringPos >= minLength) {
-				thisString[thisStringPos] = '\0';
-				printf("%X %s\n", string_start_offset, thisString);
-				string_start_offset = 0;
-				thisStringPos = 0;
-			} else {
-				string_start_offset = 0;
-				thisStringPos = 0;
-			}
+			inPtr += 2;
+			goto foundChar;
 		}
+
+		// invalid value
+		// check if we're hitting this after a qualifying string
+		// (is it long enough?)
+		if(thisStringPos >= minLength) {
+			printFoundString:
+			thisString[thisStringPos] = '\0';
+			fwrite(&thisString, sizeof(thisString), 1, stdout);
+		}
+		stringAddr = 0;
+		thisStringPos = 0;
+		continue;
+
+		foundChar:
+		// if the offset has been reset, get the new address
+		if(!stringAddr) stringAddr = inPtr;
+		// check if number of found chars so far overflows array
+		if(thisStringPos >= sizeof(thisString))
+			goto printFoundString;
 	}
 
 	return 0;
@@ -96,7 +114,7 @@ char thisString[strBufSize];
 		inChar = getc(inFile);
 		if (isAscii(inChar)) {
 			thisString[thisStringPos++] = inChar;
-			if (!string_start_offset) string_start_offset = inPtr;
+			if (!stringAddr) stringAddr = inPtr;
 			// make sure we don't overflow the string buffer
 			if(thisStringPos >= sizeof(thisString))
 				goto print_found_string;
@@ -104,11 +122,11 @@ char thisString[strBufSize];
 			print_found_string:
 			if (thisStringPos >= minLength) {
 				thisString[thisStringPos] = '\0';
-				printf("%X %s\n", string_start_offset, thisString);
-				string_start_offset = 0;
+				printf("%X %s\n", stringAddr, thisString);
+				stringAddr = 0;
 				thisStringPos = 0;
 			} else {
-				string_start_offset = 0;
+				stringAddr = 0;
 				thisStringPos = 0;
 			}
 		}
@@ -132,11 +150,13 @@ int isSjis(char most, char least) {
 	// (81 <= byte 1 <= 9f || E0 <= byte1 <= ef) && (40 <= byte2 <= 7e || 80 <= byte2 <= FC)
 	// a1 <= byte 1 <= df, ignore second byte (half width katakana)
 	// 
-	printf((char*)(most >= 0x81 | most <= 0x9f | most >= 0xe0 | most <= 0xef));	
+/*
 	return
-		(isAscii(most) | 
+		(isAscii(most) || 
 		((most >= 0x81 | most <= 0x9f | most >= 0xe0 | most <= 0xef) && (least >= 0x40 | least <= 0x7e | least >= 0x80 | least <= 0xfc)) |
 		most >= 0xa1 | most <= 0xdf);
+		*/
+	return (isAscii(most));
 }
 
 int processArgs(int argc, char **argv) {

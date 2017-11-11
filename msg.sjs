@@ -1,0 +1,1 @@
+PROGRAM_TEAM     SYSTEM___TSUKKA GALAGA__MOKUSEI XEVIOUS___KOSHI MAPPY_______MOC MAPPY___KIYOSHIプログラムチーム  システム  大塚  ギャラガ  岩永  ゼビウス  腰越  マッピー  望月  マッピー   南 
